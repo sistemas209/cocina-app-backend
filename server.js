@@ -33,9 +33,19 @@ app.post("/login", (req, res) => {
                     nombre: clientResults[0].nombre,
                     id: clientResults[0].id_cliente
                 });
-            } else {
-                return res.status(401).json({ error: "Credenciales incorrectas" });
             }
+
+            // ✅ Buscar en Empleado (COCINA)
+            const sqlEmpleado = "SELECT * FROM Empleado WHERE correo = ? AND contraseña = ?";
+            db.query(sqlEmpleado, [usuario, password], (err, empResults) => {
+                if (err) return res.status(500).json({ error: "Error en servidor" });
+
+                if (empResults.length > 0) {
+                    return res.json({ rol: empResults[0].rol, nombre: empResults[0].nombre });
+                }
+
+                return res.status(401).json({ error: "Credenciales incorrectas" });
+            });
         });
     });
 });
@@ -113,6 +123,43 @@ app.get("/pedidos", (req, res) => {
     db.query(sql, (err, results) => {
         if (err) return res.status(500).json({ error: "Error al obtener pedidos" });
         res.json(results);
+    });
+});
+
+// ============================================================
+// 📋 PEDIDOS CON DETALLE DE PRODUCTOS (para cocina)
+// ============================================================
+app.get("/pedidos-detalle", (req, res) => {
+    const sqlPedidos = `
+        SELECT p.id_pedido, p.total, p.estado, p.fecha,
+               c.nombre AS cliente
+        FROM Pedido p
+        LEFT JOIN Cliente c ON p.id_cliente = c.id_cliente
+        ORDER BY p.fecha DESC
+    `;
+    db.query(sqlPedidos, (err, pedidos) => {
+        if (err) return res.status(500).json({ error: "Error al obtener pedidos" });
+
+        if (pedidos.length === 0) return res.json([]);
+
+        let completados = 0;
+        const resultados = [];
+
+        pedidos.forEach((pedido, i) => {
+            const sqlItems = `
+                SELECT dp.cantidad, pr.nombre
+                FROM DetallePedido dp
+                LEFT JOIN Producto pr ON dp.id_producto = pr.id_producto
+                WHERE dp.id_pedido = ?
+            `;
+            db.query(sqlItems, [pedido.id_pedido], (err2, items) => {
+                resultados[i] = { ...pedido, items: items || [] };
+                completados++;
+                if (completados === pedidos.length) {
+                    res.json(resultados);
+                }
+            });
+        });
     });
 });
 
