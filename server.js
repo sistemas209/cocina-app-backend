@@ -176,6 +176,51 @@ app.put("/pedido/:id", (req, res) => {
 });
 
 // ============================================================
+// 👥 CREAR EMPLEADO
+// ============================================================
+app.post("/empleado", (req, res) => {
+    const { numEmpleado, nombre, correo, rol, password } = req.body;
+
+    const sqlCheck = "SELECT * FROM Empleado WHERE correo = ?";
+    db.query(sqlCheck, [correo], (err, existing) => {
+        if (err) return res.status(500).json({ error: "Error en servidor" });
+        if (existing.length > 0) return res.status(400).json({ error: "El correo ya está registrado" });
+
+        const sql = "INSERT INTO Empleado (num_empleado, nombre, correo, contraseña, rol) VALUES (?, ?, ?, ?, ?)";
+        db.query(sql, [numEmpleado, nombre, correo, password, rol], (err, result) => {
+            if (err) {
+                console.error(err);
+                return res.status(500).json({ error: "Error al registrar empleado" });
+            }
+            res.json({ mensaje: "Empleado registrado", id: result.insertId });
+        });
+    });
+});
+
+// ============================================================
+// 👥 OBTENER EMPLEADOS
+// ============================================================
+app.get("/empleados", (req, res) => {
+    const sql = "SELECT id_empleado, num_empleado, nombre, correo, rol FROM Empleado";
+    db.query(sql, (err, results) => {
+        if (err) return res.status(500).json({ error: "Error al obtener empleados" });
+        res.json(results);
+    });
+});
+
+// ============================================================
+// 🗑 ELIMINAR EMPLEADO
+// ============================================================
+app.delete("/empleado/:id", (req, res) => {
+    const id = req.params.id;
+    const sql = "DELETE FROM Empleado WHERE id_empleado = ?";
+    db.query(sql, [id], (err) => {
+        if (err) return res.status(500).json({ error: "Error al eliminar empleado" });
+        res.json({ mensaje: "Empleado eliminado" });
+    });
+});
+
+// ============================================================
 // 📊 ESTADÍSTICAS PARA DASHBOARD ADMIN
 // ============================================================
 app.get("/stats", (req, res) => {
