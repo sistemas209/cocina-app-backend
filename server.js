@@ -4,7 +4,7 @@ const db = require("./configuracion/db");
 
 const app = express();
 
-app.use(cors());
+app.use(cors({ origin: "*", credentials: false }));
 app.use(express.json());
 
 // ============================================================
