@@ -13,7 +13,6 @@ app.use(express.json());
 app.post("/login", (req, res) => {
     const { usuario, password } = req.body;
 
-    // Primero buscamos en Admin
     const sqlAdmin = "SELECT * FROM Admin WHERE correo = ? AND contraseña = ?";
     db.query(sqlAdmin, [usuario, password], (err, results) => {
         if (err) return res.status(500).json({ error: "Error en servidor" });
@@ -22,7 +21,6 @@ app.post("/login", (req, res) => {
             return res.json({ rol: "ADMIN", nombre: results[0].nombre });
         }
 
-        // Si no es admin, buscamos en Cliente
         const sqlCliente = "SELECT * FROM Cliente WHERE correo = ? AND contraseña = ?";
         db.query(sqlCliente, [usuario, password], (err, clientResults) => {
             if (err) return res.status(500).json({ error: "Error en servidor" });
@@ -35,7 +33,6 @@ app.post("/login", (req, res) => {
                 });
             }
 
-            // ✅ Buscar en Empleado (COCINA)
             const sqlEmpleado = "SELECT * FROM Empleado WHERE correo = ? AND contraseña = ?";
             db.query(sqlEmpleado, [usuario, password], (err, empResults) => {
                 if (err) return res.status(500).json({ error: "Error en servidor" });
@@ -56,7 +53,6 @@ app.post("/login", (req, res) => {
 app.post("/registro", (req, res) => {
     const { usuario, nombre, correo, password, telefono } = req.body;
 
-    // Verificar si el correo ya existe
     const sqlCheck = "SELECT * FROM Cliente WHERE correo = ?";
     db.query(sqlCheck, [correo], (err, existing) => {
         if (err) return res.status(500).json({ error: "Error en servidor" });
@@ -74,13 +70,88 @@ app.post("/registro", (req, res) => {
 });
 
 // ============================================================
-// 🍔 MENÚ — trae todos los productos disponibles
+// 🍔 MENÚ — trae todos los productos disponibles (clientes)
 // ============================================================
 app.get("/menu", (req, res) => {
     const sql = "SELECT * FROM Producto WHERE disponible = 1";
     db.query(sql, (err, results) => {
         if (err) return res.status(500).json({ error: "Error al obtener menú" });
         res.json(results);
+    });
+});
+
+// ============================================================
+// 🍔 MENÚ ADMIN — trae TODOS los productos (con y sin descuento)
+// ============================================================
+app.get("/admin/productos", (req, res) => {
+    const sql = "SELECT * FROM Producto ORDER BY id_producto ASC";
+    db.query(sql, (err, results) => {
+        if (err) return res.status(500).json({ error: "Error al obtener productos" });
+        res.json(results);
+    });
+});
+
+// ============================================================
+// ✏️ ACTUALIZAR PRECIO DE UN PRODUCTO
+// ============================================================
+app.put("/admin/producto/:id/precio", (req, res) => {
+    const id = req.params.id;
+    const { precio } = req.body;
+
+    if (!precio || isNaN(precio) || precio <= 0) {
+        return res.status(400).json({ error: "Precio inválido" });
+    }
+
+    const sql = "UPDATE Producto SET precio = ? WHERE id_producto = ?";
+    db.query(sql, [precio, id], (err) => {
+        if (err) return res.status(500).json({ error: "Error al actualizar precio" });
+        res.json({ mensaje: "Precio actualizado correctamente" });
+    });
+});
+
+// ============================================================
+// 🏷️ APLICAR DESCUENTO A UN PRODUCTO
+// El descuento se guarda como el nuevo precio rebajado.
+// Se guarda el precio original en un campo aparte si existe,
+// o simplemente se actualiza el precio con el descuento aplicado.
+// ============================================================
+app.put("/admin/producto/:id/descuento", (req, res) => {
+    const id = req.params.id;
+    const { descuento } = req.body; // porcentaje: ej. 10 = 10%
+
+    if (descuento === undefined || isNaN(descuento) || descuento < 0 || descuento > 100) {
+        return res.status(400).json({ error: "Descuento inválido (debe ser 0-100)" });
+    }
+
+    // Primero obtenemos el precio actual
+    db.query("SELECT precio FROM Producto WHERE id_producto = ?", [id], (err, results) => {
+        if (err || results.length === 0) return res.status(500).json({ error: "Producto no encontrado" });
+
+        const precioActual = parseFloat(results[0].precio);
+        const precioConDescuento = Math.round(precioActual * (1 - descuento / 100));
+
+        db.query("UPDATE Producto SET precio = ? WHERE id_producto = ?", [precioConDescuento, id], (err2) => {
+            if (err2) return res.status(500).json({ error: "Error al aplicar descuento" });
+            res.json({
+                mensaje: `Descuento de ${descuento}% aplicado`,
+                precioAnterior: precioActual,
+                precioNuevo: precioConDescuento
+            });
+        });
+    });
+});
+
+// ============================================================
+// 🔄 CAMBIAR DISPONIBILIDAD DE PRODUCTO (activar/desactivar)
+// ============================================================
+app.put("/admin/producto/:id/disponibilidad", (req, res) => {
+    const id = req.params.id;
+    const { disponible } = req.body; // 1 o 0
+
+    const sql = "UPDATE Producto SET disponible = ? WHERE id_producto = ?";
+    db.query(sql, [disponible, id], (err) => {
+        if (err) return res.status(500).json({ error: "Error al cambiar disponibilidad" });
+        res.json({ mensaje: disponible ? "Producto activado" : "Producto desactivado" });
     });
 });
 
@@ -96,7 +167,6 @@ app.post("/pedido", (req, res) => {
 
         const id_pedido = result.insertId;
 
-        // Insertar cada item del pedido
         if (items && items.length > 0) {
             const sqlItems = "INSERT INTO DetallePedido (id_pedido, id_producto, cantidad, precio_unitario) VALUES ?";
             const valores = items.map(i => [id_pedido, i.id_producto, i.cantidad, i.precio]);
