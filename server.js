@@ -234,6 +234,24 @@ app.get("/pedidos-detalle", (req, res) => {
 });
 
 // ============================================================
+// ✏️ ACTUALIZAR TOTAL DE UN PEDIDO (solo admin)
+// ============================================================
+app.put("/pedido/:id/total", (req, res) => {
+    const id = req.params.id;
+    const { total } = req.body;
+
+    if (!total || isNaN(total) || total <= 0) {
+        return res.status(400).json({ error: "Total inválido" });
+    }
+
+    const sql = "UPDATE Pedido SET total = ? WHERE id_pedido = ?";
+    db.query(sql, [total, id], (err) => {
+        if (err) return res.status(500).json({ error: "Error al actualizar total" });
+        res.json({ mensaje: "Total actualizado correctamente", total });
+    });
+});
+
+// ============================================================
 // ✅ MARCAR PEDIDO COMO TERMINADO
 // ============================================================
 app.put("/pedido/:id", (req, res) => {
